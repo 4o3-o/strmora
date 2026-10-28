@@ -45,6 +45,14 @@ go build -o bin/strmora ./cmd/strmora
 - 播放器访问媒体源，Strmora 不代理或转码视频。
 - 计划、限流、取消、恢复和人工确认后续按阶段交付。
 
+## 开源参考与致谢
+
+Strmora 的 Emby 兼容网关与协议契约设计参考了以下优秀开源项目的实践经验与思路：
+
+- [OpenList](https://github.com/OpenListTeam/OpenList) (AGPL-3.0)：参考其内置 Emby 兼容服务的请求路由分发、多源 Token 容错提取、会话鉴权交接（Token Handoff）以及辅助握手契约设计。
+- [Emby-go](https://github.com/holll/Emby-go) (MIT)：参考其基于 Go 语言的轻量级 Emby 协议契约实现、STRM 302 重定向播放策略与会话播放状态设计。
+- [MediaBridge](https://github.com/dlushu/MediaBridge) (AGPL-3.0)：参考其实机协议测试对照记录（真机 Emby 客户端对 DTO 字段完整性、相对路径处理及错误码的响应细节）。
+
 ## 许可
 
 AGPL-3.0，见 LICENSE。用户自行配置 TMDB Key；TMDB 内容不随代码许可重新授权。当前无第三方元数据或私人媒体清单打包。
