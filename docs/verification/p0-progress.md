@@ -43,3 +43,10 @@ P0 原型不包含管理前端、TMDB、真实源扫描/下载调度、整理与
 - GitHub 仓库：https://github.com/4o3-o/strmora；推送和 CI 结果由后续记录补充。
 
 阶段状态：P0 工程原型已实现并通过本地验证，P0 全部验收未完成；停留 P0，不推进 P1。
+
+## 推送与 CI
+
+- 代码提交 d47a596 已推送 main；本地与远端 SHA 一致，私人样本未纳入。
+- GitHub Actions 运行 https://github.com/4o3-o/strmora/actions/runs/40697381706 成功：go test -race ./...、go vet ./...、go build ./cmd/strmora 全部通过。
+- CI 有托管 runner/Actions Node 运行时迁移提示，当前执行成功；发布前维护 CI 版本时处理。
+- 本条验收记录仅修改文档，使用 [skip ci]，不重复启动相同代码构建。
