@@ -86,3 +86,12 @@ P0 原型不包含管理前端、TMDB、真实源扫描/下载调度、整理与
 - 增强 Token 提取器，覆盖各种 Query 参数大小写与 Header 格式；图片资源放行免密浏览。
 - 补齐客户端握手探测常用留白端点（System/Configuration/Public、Branding、Capabilities 等）。
 - 单元测试与公网 Tunnel 自动化探测均已通过（DirectStreamUrl 裸请求直接 302 重定向成功）。
+
+## 播放器实机端到端验收通过（2026-10-28）
+
+- **网易爆米花**：iOS 客户端实测连接、海报浏览、302 跳转播放成功，播放进度上报正常。
+- **Infuse**：iOS 最新版实测连接成功，海报墙与媒体库浏览正常，302 跳转播放成功。
+- **VidHub**：iOS 最新版实测连接成功，完成播放流鉴权修复（Token Handoff）后 302 跳转播放成功。
+- **开源致谢与声明**：已在 README.md 和 THIRD_PARTY_NOTICES.md 中补充对 OpenList、Emby-go、MediaBridge 的参考与协议致谢声明。
+
+**阶段结论：P0 协议原型与三款客户端实机验收全部完成，准备推进 P1（媒体索引与媒体源适配器）。**
