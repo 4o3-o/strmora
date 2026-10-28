@@ -1,6 +1,8 @@
 # P0 Emby 最小协议契约与手工验收
 
-这是原型接口契约，客户端实测前不声称兼容完整 Emby。根路径和 `/emby` 路径同时可用。所有业务接口都需设备 token，只有 health、Public Info 和密码登录公开。
+这是原型接口契约，目标为 Infuse、VidHub、网易爆米花，不提供官方 Emby 客户端兼容。根路径和 `/emby` 路径同时可用。2026-10-29 仅保留 P0 后的详细状态以 [P0重新审计](../verification/2026-10-29-p0-audit.md) 为准；基本连接/播放有用户历史确认，其余能力逐项记录。
+
+当前实际公开的GET端点包括 health、System/Info/Public、System/Configuration/Public、Branding/Configuration、Localization/Options 和合成图片；密码登录公开，Sessions/Capabilities 的已注册GET/POST及Full的POST也公开。其他业务端点需设备token。注意：当前公开GET的匿名HEAD返回401，这是已发现未修的契约问题，不应理解为有意的认证设计。占位图片免认证不代表未来真实媒体图片的授权策略已确定。
 
 ## 合成媒体
 
@@ -21,10 +23,10 @@ movies 库：movie-p0（单版本），movie-versions（双版本）。tv 库：
 | GET /Users/{user}/Items/Latest，…/Resume | 合成库最近条目/有进度未看条目；尚无真实时间排序 |
 | GET /Users/{user}/Items/{id}，GET /Items/{id} | 条目、元数据、当前用户状态 |
 | GET /Shows/{id}/Seasons，…/Episodes | 季度/单集；Episodes 支持 SeasonId |
-| GET /Items/{id}/Images/{kind} | 本地占位 PNG |
+| GET /Items/{id}/Images/{kind} | 免认证的合成占位 PNG |
 | GET/POST /Items/{id}/PlaybackInfo | MediaSources、DirectStreamUrl、外挂字幕、PlaySessionId |
 | GET/HEAD /Videos/{id}/stream（或 stream.mkv） | 从本地 STRM 读取 URL，鉴权后仅 302 |
-| GET/HEAD /Videos/{id}/{source}/Subtitles/0/Stream.srt | 原样合成 SRT，支持本地文件内容 Range |
+| GET/HEAD /Videos/{id}/{source}/Subtitles/0/Stream.srt | 内存合成 SRT，支持内容 Range；不是实际字幕文件发现/下载 |
 | POST /Sessions/Playing、…/Progress、…/Stopped | ItemId、PositionTicks、PlaySessionId 持久化 |
 | POST/DELETE /Users/{user}/PlayedItems/{id} | 已看 |
 | POST/DELETE /Users/{user}/FavoriteItems/{id} | 收藏 |
@@ -38,7 +40,7 @@ P0 测试用户固定内部 ID user-p0。API 拒绝其他 user 路径和 UserId 
 
 播放信息不发起视频请求。STRM 仅允许 HTTP(S) URL，禁止多行、URL内嵌密码、非HTTP协议。双版本可分别编辑对应 STRM；原型不会下载或读取视频长度。需独立验证最终地址 HEAD/Range/206/拖动。
 
-## 三客户端验收（待执行）
+## 三客户端验收步骤与证据范围
 
 每个目标分别记录平台、系统、客户端版本、接入 URL 形式、测试时间（Asia/Shanghai），不得保存密码/token/带签名URL。
 
@@ -54,11 +56,11 @@ P0 测试用户固定内部 ID user-p0。API 拒绝其他 user 路径和 UserId 
 
 | 客户端 | 版本 | 登录/库 | 302/拖动 | 字幕 | 进度 | 结果 |
 |---|---|---|---|---|---|---|
-| Infuse | iOS，用户称最新版，build待提供 | 补齐库和显示设置后用户确认连接成功 | 入口302已观测，实际播放/拖动待确认 | 待测 | 待测 | 连接通过，整体待验收 |
-| VidHub | iOS，用户称最新版，build待提供 | 用户确认可连接 | 初次失败；用户随后复测确认可播放 | 待测 | 待测 | 基本播放已确认，拖动/字幕/进度仍待验收 |
-| 网易爆米花 | 版本/平台待提供 | 用户已登录浏览；修复后用户确认恢复连接 | 用户已播放，入口日志302；拖动待测 | 待测 | 播放事件/进度已收到 | 已发现并修复用户查询404，尚未整体通过 |
+| Infuse | iOS，用户当时称最新版，具体版本/build待提供 | 用户确认通过 | 用户确认基本播放，拖动待测 | 待测 | 待补逐项记录 | 基本播放通过；详细能力待验收 |
+| VidHub | iOS，用户当时称最新版，具体版本/build待提供 | 用户确认通过 | 用户确认基本播放，拖动待测 | 待测 | 待补逐项记录 | 基本播放通过；详细能力待验收 |
+| 网易爆米花 | 版本/平台待提供 | 修复后用户确认恢复连接 | 用户确认基本播放，入口302；拖动待测 | 待测 | 历史收到事件，完整续播待测 | 基本播放通过；详细能力待验收 |
 
-P0 退出条件：本地自动化通过 + 原始目录树解析通过 + 三客户端实际结果记录及关键缺失修复。当前不能因本地测试通过把整个 P0 标记完成。
+P0 退出条件：本地自动化通过 + 原始目录树解析通过 + 三客户端实际结果记录及关键缺失修复。2026-10-29重新审计发现4项代码问题且详细真机矩阵未齐；不再沿用“所有能力全部完成”的结论。修复与补测按P0分步计划另行执行。
 
 ## 网易爆米花连接检查修复（2026-10-28）
 

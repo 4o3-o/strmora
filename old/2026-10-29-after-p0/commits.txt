@@ -1,0 +1,12 @@
+deed394b0dd351b046c838086e99600cd3519061 feat: implement full 4-column scraping workbench and directory override UI
+3647c94a743fd580299f2ddd03ac146f3f3906e4 feat: integrate /admin web console with live tree inspection and dashboard APIs
+6cd9eba98f7b0e5b1eca410d5459a3c1007d2828 feat: complete P6 release preparation with multi-stage Dockerfile, docker-compose, and documentation
+088822394c3b7552cbca0ede8fd88584c11ee041 chore: record P5 authorization
+37263e7306563e678cc10199070fda0915d999d7 feat: implement P5 admin auth with IP lockout and dashboard APIs
+4094b0e3cddebcba16ad62ab38bda6f71b1c245a feat: implement P4 STRM URL encoder, hierarchical markdown indexer, and remote WebDAV syncer
+7467ac464f7004e0127955d9c26a774182a8fed9 feat: implement P3 batch scheduler with default-first ordering and persistent executor with cancel pause
+60666b57bd99a2d096decb9eba066132af0905a6 chore: advance to P3 (organizer execution engine & recovery)
+5f46aea1142476846083bc23ced2bae6c9b50682 feat: implement P2 filename parser, TMDB client with episode groups, naming template engine, and path planner
+2394639da513b40f72b0a4f3c6a5263bcd6313f2 chore: advance to P2 (TMDB scraping & planning engine)
+47d6f13bb71ed8f9e772348d9379053de6084292 feat: implement P1 media source adapters, shared rate limiter, snapshot diffing, and database schema
+20dd15ad8223b6bbc109e9b458f33a72b163097a chore: record P1 authorization and boundary: do not support official Emby client
