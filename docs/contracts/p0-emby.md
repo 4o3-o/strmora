@@ -73,3 +73,19 @@ Infuse实际请求依次在 /Library/VirtualFolders 和 /DisplayPreferences/user
 参考模型：[VirtualFolderInfo](https://dev.emby.media/reference/RestAPI/LibraryStructureService/getLibraryVirtualfoldersQuery.html)、[DisplayPreferences](https://dev.emby.media/reference/RestAPI/DisplayPreferencesService/getDisplaypreferencesById.html)。VirtualFolders旧路由按客户端实际请求提供数组，不混用Query路由的Items封装。
 
 访问日志增加固定客户端类别和凭据传输类别，只记录类别、不记录UA原文、设备ID、查询参数/头/令牌值。VidHub先前失败原因尚未定论；用户随后复测明确“vidhub可以播放视频了”，基本播放记为通过，但不将其归因于Infuse初始化接口修复。
+
+## 兼容性协议强化与初始化容错优化（2026-10-28）
+
+参考 OpenList v4.2.9、Emby-go、MediaBridge 的生产实践，对协议层完成以下三大优化：
+
+1. **播放流与字幕鉴权交接（Token Handoff）**：
+   - 在 PlaybackInfo 返回的 DirectStreamUrl 与 Subtitle DeliveryUrl 中内嵌当前请求上下文的会话令牌（如 &api_key=...），并显式声明 AddApiKeyToDirectStreamUrl: false。
+   - 彻底解决第三方播放器或底层播放核心（mpv/AVPlayer）独立拉流时不带 Header 导致的 401 播放失败。
+   - 将 MediaSource 补充 SupportsDirectPlay: true、IsRemote: true 等通用标头。
+
+2. **多源 Token 容错解析与静态资源放行**：
+   - 统一 extractToken 实现，Query 中大小写不敏感解析 api_key / apikey / x-emby-token / x-mediabrowser-token，Header 补充兼容解析。
+   - 对 /Items/{id}/Images/* 海报/背景图等静态资源直接放行，避免播放器异步拉图未携带凭据导致破图。
+
+3. **初始化与辅助探测契约留白**：
+   - 补齐 /System/Configuration/Public、/Branding/Configuration、/Localization/Options、/Sessions/Capabilities、/Items/Counts、/Shows/NextUp 等探测端点，返回规范空对象或计数响应，避免客户端报未捕获异常。

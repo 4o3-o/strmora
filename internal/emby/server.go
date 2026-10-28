@@ -164,6 +164,45 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	}
 	return true
 }
+func extractToken(r *http.Request) string {
+	for k, v := range r.URL.Query() {
+		if len(v) == 0 || v[0] == "" {
+			continue
+		}
+		if strings.EqualFold(k, "api_key") || strings.EqualFold(k, "apikey") ||
+			strings.EqualFold(k, "x-emby-token") || strings.EqualFold(k, "x-mediabrowser-token") {
+			return strings.TrimSpace(v[0])
+		}
+	}
+	for _, h := range []string{"X-Emby-Token", "X-MediaBrowser-Token"} {
+		if t := strings.TrimSpace(r.Header.Get(h)); t != "" {
+			return t
+		}
+	}
+	auth := r.Header.Get("Authorization")
+	if auth == "" {
+		auth = r.Header.Get("X-Emby-Authorization")
+	}
+	if auth != "" {
+		for _, v := range strings.Split(auth, ",") {
+			v = strings.TrimSpace(v)
+			for _, p := range []string{"MediaBrowser ", "Emby "} {
+				if strings.HasPrefix(v, p) {
+					v = strings.TrimPrefix(v, p)
+				}
+			}
+			lower := strings.ToLower(v)
+			if idx := strings.Index(lower, "token="); idx != -1 {
+				tok := strings.Trim(v[idx+6:], "\"' ")
+				if tok != "" {
+					return tok
+				}
+			}
+		}
+	}
+	return ""
+}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.URL.Path == "/emby" || strings.HasPrefix(r.URL.Path, "/emby/") {
@@ -175,38 +214,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			r.URL.Path = "/"
 		}
 	}
-	public := (r.Method == "GET" && (r.URL.Path == "/healthz" || r.URL.Path == "/System/Info/Public")) || (r.Method == "POST" && r.URL.Path == "/Users/AuthenticateByName")
+	pathLower := strings.ToLower(r.URL.Path)
+	public := (r.Method == "GET" && (pathLower == "/healthz" || pathLower == "/system/info/public" || pathLower == "/system/configuration/public" || pathLower == "/branding/configuration" || pathLower == "/localization/options" || strings.Contains(pathLower, "/images/"))) ||
+		(r.Method == "POST" && pathLower == "/users/authenticatebyname") ||
+		((r.Method == "GET" || r.Method == "POST") && (pathLower == "/sessions/capabilities" || pathLower == "/sessions/capabilities/full"))
+
 	if !public {
-		token := r.Header.Get("X-Emby-Token")
-		if token == "" {
-			token = r.Header.Get("X-MediaBrowser-Token")
-		}
-		if token == "" {
-			token = r.URL.Query().Get("api_key")
-		}
-		if token == "" {
-			auth := r.Header.Get("Authorization")
-			if auth == "" {
-				auth = r.Header.Get("X-Emby-Authorization")
-			}
-			for _, v := range strings.Split(auth, ",") {
-				v = strings.TrimSpace(v)
-				if strings.HasPrefix(v, "MediaBrowser ") {
-					v = strings.TrimPrefix(v, "MediaBrowser ")
-				}
-				if strings.HasPrefix(v, "Token=") {
-					token = strings.Trim(strings.TrimPrefix(v, "Token="), "\"")
-				}
-			}
-		}
+		token := extractToken(r)
 		var user string
 		if token == "" || s.db.QueryRow("SELECT user_id FROM devices WHERE token_hash=?", tokenHash(token)).Scan(&user) != nil {
 			fail(w, 401, "valid device token required")
 			return
 		}
-		if u := r.URL.Query().Get("UserId"); u != "" && u != user {
-			fail(w, 403, "user mismatch")
-			return
+		for _, key := range []string{"UserId", "userId", "userid"} {
+			if u := r.URL.Query().Get(key); u != "" && u != user {
+				fail(w, 403, "user mismatch")
+				return
+			}
 		}
 	}
 	s.mux.ServeHTTP(w, r)
@@ -249,6 +273,32 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /Users/{user}/FavoriteItems/{id}", func(w http.ResponseWriter, r *http.Request) { s.flag(w, r, "favorite", true) })
 	s.mux.HandleFunc("DELETE /Users/{user}/FavoriteItems/{id}", func(w http.ResponseWriter, r *http.Request) { s.flag(w, r, "favorite", false) })
 	s.mux.HandleFunc("POST /Sessions/Logout", s.logout)
+	// Auxiliary & blank endpoints for client tolerance
+	s.mux.HandleFunc("GET /System/Configuration/Public", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]any{}) })
+	s.mux.HandleFunc("GET /Branding/Configuration", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]any{}) })
+	s.mux.HandleFunc("GET /Localization/Options", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, []any{}) })
+	s.mux.HandleFunc("GET /Sessions/Capabilities", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) })
+	s.mux.HandleFunc("POST /Sessions/Capabilities", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) })
+	s.mux.HandleFunc("POST /Sessions/Capabilities/Full", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) })
+	s.mux.HandleFunc("GET /Items/Counts", func(w http.ResponseWriter, r *http.Request) {
+		movieCount := 0
+		seriesCount := 0
+		episodeCount := 0
+		for _, it := range s.items {
+			switch it.Type {
+			case "Movie":
+				movieCount++
+			case "Series":
+				seriesCount++
+			case "Episode":
+				episodeCount++
+			}
+		}
+		respond(w, 200, map[string]any{"MovieCount": movieCount, "SeriesCount": seriesCount, "EpisodeCount": episodeCount, "ItemCount": len(s.items)})
+	})
+	s.mux.HandleFunc("GET /Shows/NextUp", func(w http.ResponseWriter, r *http.Request) {
+		respond(w, 200, map[string]any{"Items": []any{}, "TotalRecordCount": 0, "StartIndex": 0})
+	})
 }
 func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, map[string]any{"Id": s.id, "ServerName": "Strmora P0", "Version": "0.0.1", "ProductName": "Strmora", "StartupWizardCompleted": true})
@@ -322,7 +372,7 @@ func (s *Server) dto(i Item) map[string]any {
 	if i.Type == "Movie" || i.Type == "Episode" {
 		v["MediaType"] = "Video"
 		v["Container"] = "mkv"
-		v["MediaSources"] = s.sources(i)
+		v["MediaSources"] = s.sources(i, "")
 	}
 	return v
 }
@@ -475,15 +525,44 @@ func (s *Server) episodes(w http.ResponseWriter, r *http.Request) {
 		return i.Type == "Episode" && i.SeriesID == r.PathValue("id") && (r.URL.Query().Get("SeasonId") == "" || i.SeasonID == r.URL.Query().Get("SeasonId"))
 	})
 }
-func (s *Server) sources(i Item) []map[string]any {
+func (s *Server) sources(i Item, token string) []map[string]any {
 	ids := []string{i.ID}
 	if i.ID == "movie-versions" {
 		ids = append(ids, i.ID+"-alternate")
 	}
 	out := []map[string]any{}
 	for n, id := range ids {
-		p := "/Videos/" + i.ID + "/stream?MediaSourceId=" + id + "-source"
-		out = append(out, map[string]any{"Id": id + "-source", "Name": fmt.Sprintf("P0 version %d (technical properties unknown)", n+1), "Path": p, "Protocol": "Http", "Type": "Default", "Container": "mkv", "SupportsDirectPlay": false, "SupportsDirectStream": true, "SupportsTranscoding": false, "DirectStreamUrl": p, "MediaStreams": []any{map[string]any{"Index": 0, "Type": "Subtitle", "Codec": "srt", "Language": "eng", "IsExternal": true, "IsTextSubtitleStream": true, "DeliveryMethod": "External", "DeliveryUrl": "/Videos/" + i.ID + "/" + id + "-source/Subtitles/0/Stream.srt"}}})
+		streamURL := fmt.Sprintf("/Videos/%s/stream?MediaSourceId=%s-source&Static=true", i.ID, id)
+		subURL := fmt.Sprintf("/Videos/%s/%s-source/Subtitles/0/Stream.srt", i.ID, id)
+		if token != "" {
+			streamURL += "&api_key=" + token
+			subURL += "?api_key=" + token
+		}
+		out = append(out, map[string]any{
+			"Id":                         id + "-source",
+			"Name":                       fmt.Sprintf("P0 version %d (technical properties unknown)", n+1),
+			"Path":                       streamURL,
+			"Protocol":                   "Http",
+			"Type":                       "Default",
+			"Container":                  "mkv",
+			"IsRemote":                   true,
+			"SupportsDirectPlay":         true,
+			"SupportsDirectStream":       true,
+			"SupportsTranscoding":        false,
+			"SupportsProbing":            false,
+			"DirectStreamUrl":            streamURL,
+			"AddApiKeyToDirectStreamUrl": false,
+			"MediaStreams": []any{map[string]any{
+				"Index":                0,
+				"Type":                 "Subtitle",
+				"Codec":                "srt",
+				"Language":             "eng",
+				"IsExternal":           true,
+				"IsTextSubtitleStream": true,
+				"DeliveryMethod":       "External",
+				"DeliveryUrl":          subURL,
+			}},
+		})
 	}
 	return out
 }
@@ -496,7 +575,8 @@ func (s *Server) playback(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "item is not playable")
 		return
 	}
-	respond(w, 200, map[string]any{"MediaSources": s.sources(i), "PlaySessionId": randomID()})
+	token := extractToken(r)
+	respond(w, 200, map[string]any{"MediaSources": s.sources(i, token), "PlaySessionId": randomID()})
 }
 func (s *Server) sourceID(i Item, raw string) (string, bool) {
 	if raw == "" || raw == i.ID+"-source" {

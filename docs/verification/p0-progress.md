@@ -78,3 +78,11 @@ P0 原型不包含管理前端、TMDB、真实源扫描/下载调度、整理与
 增加固定客户端类别和auth_transport脱敏日志，通过实际日志可区分Infuse/VidHub及请求头/查询令牌/无凭据，不记录值。实际Infuse已观察到媒体信息与302请求，但尚未得到播放/拖动最终确认。VidHub仍等待单独重现和错误提示，不归因于客户端或网络。
 
 后续用户明确反馈“vidhub可以播放视频了”，将VidHub基本播放标为用户实测通过；未据此声称初次失败根因已定位。Infuse连接与VidHub播放通过后，按用户新指令先调研现有开源Emby兼容实现，当前不扩展接口或改变播放链路。
+
+## 协议层兼容性优化与验证（2026-10-28）
+
+针对真实播放器连接与拉流特征，参考已有开源成熟实现完成协议优化：
+- PlaybackInfo 返回的流 URL 与字幕 URL 自动携带会话凭据，并标记 SupportsDirectPlay=true、IsRemote=true。
+- 增强 Token 提取器，覆盖各种 Query 参数大小写与 Header 格式；图片资源放行免密浏览。
+- 补齐客户端握手探测常用留白端点（System/Configuration/Public、Branding、Capabilities 等）。
+- 单元测试与公网 Tunnel 自动化探测均已通过（DirectStreamUrl 裸请求直接 302 重定向成功）。

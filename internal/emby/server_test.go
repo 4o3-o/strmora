@@ -255,3 +255,96 @@ func TestDisplayPreferencesDefaultsAndUserBoundary(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenExtractorAndPublicEndpoints(t *testing.T) {
+	s, _ := fixture(t)
+	token := login(t, s)
+
+	// 1. Verify token extracted via X-Emby-Token query parameter (case-insensitive)
+	w := call(s, "GET", "/Users/user-p0/Views?x-emby-token="+token, "", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("query x-emby-token failed: %d %s", w.Code, w.Body)
+	}
+
+	// 2. Verify token extracted via api_key query parameter (case-insensitive)
+	w = call(s, "GET", "/Users/user-p0/Views?ApiKey="+token, "", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("query ApiKey failed: %d %s", w.Code, w.Body)
+	}
+
+	// 3. Verify public endpoints (no auth required)
+	for _, p := range []string{
+		"/System/Configuration/Public",
+		"/Branding/Configuration",
+		"/Localization/Options",
+		"/Sessions/Capabilities",
+		"/Items/movie-p0/Images/Primary",
+		"/Items/movie-p0/Images/Backdrop",
+	} {
+		w = call(s, "GET", p, "", "")
+		if w.Code != http.StatusOK && w.Code != http.StatusNoContent {
+			t.Errorf("public endpoint %s returned %d %s", p, w.Code, w.Body)
+		}
+	}
+
+	// 4. Verify auxiliary blank endpoints with auth
+	for _, p := range []string{
+		"/Items/Counts",
+		"/Shows/NextUp",
+	} {
+		w = call(s, "GET", p, token, "")
+		if w.Code != http.StatusOK {
+			t.Errorf("aux endpoint %s returned %d %s", p, w.Code, w.Body)
+		}
+	}
+}
+
+func TestPlaybackHandoffTokenAndSourceFlags(t *testing.T) {
+	s, _ := fixture(t)
+	token := login(t, s)
+
+	w := call(s, "POST", "/Items/movie-p0/PlaybackInfo", token, "{}")
+	if w.Code != http.StatusOK {
+		t.Fatalf("playbackinfo failed: %d %s", w.Code, w.Body)
+	}
+
+	var resp struct {
+		MediaSources []struct {
+			SupportsDirectPlay         bool
+			SupportsDirectStream       bool
+			IsRemote                   bool
+			AddApiKeyToDirectStreamUrl bool
+			DirectStreamUrl            string
+			MediaStreams               []struct {
+				DeliveryUrl string
+			}
+		}
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.MediaSources) == 0 {
+		t.Fatal("empty MediaSources")
+	}
+	src := resp.MediaSources[0]
+	if !src.SupportsDirectPlay || !src.SupportsDirectStream || !src.IsRemote {
+		t.Fatalf("unexpected flags: %+v", src)
+	}
+	if src.AddApiKeyToDirectStreamUrl {
+		t.Fatalf("expected AddApiKeyToDirectStreamUrl=false, got true")
+	}
+	if !strings.Contains(src.DirectStreamUrl, "api_key="+token) {
+		t.Fatalf("DirectStreamUrl missing api_key token: %s", src.DirectStreamUrl)
+	}
+	if len(src.MediaStreams) == 0 || !strings.Contains(src.MediaStreams[0].DeliveryUrl, "api_key="+token) {
+		t.Fatalf("subtitle DeliveryUrl missing token: %+v", src.MediaStreams)
+	}
+
+	// Now fetch DirectStreamUrl directly WITHOUT any auth header or cookie - must redirect 302!
+	streamReq := httptest.NewRequest("GET", src.DirectStreamUrl, nil)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, streamReq)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("stream without header auth returned %d (expected 302): %s", rec.Code, rec.Body)
+	}
+}
