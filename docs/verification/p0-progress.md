@@ -50,3 +50,13 @@ P0 原型不包含管理前端、TMDB、真实源扫描/下载调度、整理与
 - GitHub Actions 运行 https://github.com/4o3-o/strmora/actions/runs/40697381706 成功：go test -race ./...、go vet ./...、go build ./cmd/strmora 全部通过。
 - CI 有托管 runner/Actions Node 运行时迁移提示，当前执行成功；发布前维护 CI 版本时处理。
 - 本条验收记录仅修改文档，使用 [skip ci]，不重复启动相同代码构建。
+
+## 20000端口模拟（2026-10-28）
+
+用户授权固定20000端口启动，并通过自有Docker Cloudflare Tunnel测试。测试源改用用户提供的本机STRM目录，只读复制5份进入独立测试目录；具体配置/密码/源映射/运行PID/报告仅在被Git忽略的data/p0-local/。
+
+增加可选脱敏访问日志和可重复模拟脚本。日志测试先失败再实现通过。实际本地25项通过，包括源HEAD和两个不同偏移1KiB Range；默认Python UA的403与curl UA的206已做对照，未将403误判为源文件无效。具体测试步骤见p0-local-testing.md。
+
+根据用户Tunnel容器网关，监听其指定网关地址20000端口；无Tunnel/防火墙配置变更。公网请求已建立TCP/TLS但未收到HTTP首字节，暂未确认外网通过。真实客户端仍待验收。
+
+公网后续：用户自行添加防火墙放行后，2026-10-28 21:54:36 +08:00 完成HTTPS 25项模拟，全通过。Tunnel回源地址保持正确配置；未修改用户的Tunnel/防火墙，未容器化Strmora。测试凭据已单独提供用户，始终不纳入版本控制。实际客户端仍待用户测试。

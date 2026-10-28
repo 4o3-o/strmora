@@ -56,6 +56,7 @@ func run() error {
 	f := flag.NewFlagSet("strmora", flag.ContinueOnError)
 	addr := f.String("listen", "127.0.0.1:8096", "listen address (P0: trusted local testing only)")
 	dir := f.String("data", "data/p0", "local P0 data directory")
+	accessPath := f.String("access-log", "", "optional sanitized JSONL access log")
 	if e := f.Parse(os.Args[1:]); e != nil {
 		return e
 	}
@@ -75,7 +76,16 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	server := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
+	var httpHandler http.Handler = handler
+	if *accessPath != "" {
+		file, err := os.OpenFile(*accessPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		httpHandler = accessLog(handler, log.New(file, "", 0))
+	}
+	server := &http.Server{Addr: *addr, Handler: httpHandler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	done := make(chan error, 1)
