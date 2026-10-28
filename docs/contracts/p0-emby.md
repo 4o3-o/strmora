@@ -15,6 +15,8 @@ movies 库：movie-p0（单版本），movie-versions（双版本）。tv 库：
 | POST /Users/AuthenticateByName | JSON Username/Pw，返回 User/AccessToken/SessionInfo |
 | GET /Users/Me、GET /Users/{id} | 当前已认证测试用户；其他用户403，无令牌401 |
 | GET /Users/{user}/Views | movies、tv 库 |
+| GET /Library/VirtualFolders | 授权逻辑库数组，ItemId对应库ID，不返回物理路径 |
+| GET /DisplayPreferences/{id} | P0 默认显示设置；支持UserId/userId边界，尚不提供设置写入 |
 | GET /Users/{user}/Items，GET /Items | ParentId、Recursive、IncludeItemTypes、SearchTerm、StartIndex、Limit |
 | GET /Users/{user}/Items/Latest，…/Resume | 合成库最近条目/有进度未看条目；尚无真实时间排序 |
 | GET /Users/{user}/Items/{id}，GET /Items/{id} | 条目、元数据、当前用户状态 |
@@ -52,8 +54,8 @@ P0 测试用户固定内部 ID user-p0。API 拒绝其他 user 路径和 UserId 
 
 | 客户端 | 版本 | 登录/库 | 302/拖动 | 字幕 | 进度 | 结果 |
 |---|---|---|---|---|---|---|
-| Infuse | 未提供 | 待测 | 待测 | 待测 | 待测 | 未验证 |
-| VidHub | 未提供 | 待测 | 待测 | 待测 | 待测 | 未验证 |
+| Infuse | iOS，用户称最新版，build待提供 | 补齐库和显示设置后用户确认连接成功 | 入口302已观测，实际播放/拖动待确认 | 待测 | 待测 | 连接通过，整体待验收 |
+| VidHub | iOS，用户称最新版，build待提供 | 用户确认可连接 | 初次失败；用户随后复测确认可播放 | 待测 | 待测 | 基本播放已确认，拖动/字幕/进度仍待验收 |
 | 网易爆米花 | 版本/平台待提供 | 用户已登录浏览；修复后用户确认恢复连接 | 用户已播放，入口日志302；拖动待测 | 待测 | 播放事件/进度已收到 | 已发现并修复用户查询404，尚未整体通过 |
 
 P0 退出条件：本地自动化通过 + 原始目录树解析通过 + 三客户端实际结果记录及关键缺失修复。当前不能因本地测试通过把整个 P0 标记完成。
@@ -63,3 +65,11 @@ P0 退出条件：本地自动化通过 + 原始目录树解析通过 + 三客�
 实际客户端反复 GET /emby/Users/user-p0，旧实现只有 /Users/Me，返回404。补齐按ID读取当前用户接口，同时保留401/403边界；测试先复现404再通过。该路由对应 [Emby官方getUsersById](https://dev.emby.media/reference/RestAPI/UserService/getUsersById.html)。
 
 公网根路径和/emby前缀均已验证200。服务重启前签发的token、ServerId、观看状态均保留。用户刷新后明确反馈“已恢复连接”，本项已有真实客户端确认。图片401和 HideFromResume/NextUp缺失另行跟踪，不在此次用户查询修复中放宽鉴权或伪造成功。
+
+## Infuse 初始化接口修复与 VidHub 排查（2026-10-28）
+
+Infuse实际请求依次在 /Library/VirtualFolders 和 /DisplayPreferences/usersettings 遇到404。分别补齐逻辑库数组（含Name/ItemId/CollectionType/Locations空数组）和默认显示设置（Id/Client/SortBy/SortOrder/CustomPrefs），保留认证和用户隔离；并非所有未知接口统一返回空200。用户复测确认完成连接。显示设置当前无用户自定义覆盖，不提供写入。
+
+参考模型：[VirtualFolderInfo](https://dev.emby.media/reference/RestAPI/LibraryStructureService/getLibraryVirtualfoldersQuery.html)、[DisplayPreferences](https://dev.emby.media/reference/RestAPI/DisplayPreferencesService/getDisplaypreferencesById.html)。VirtualFolders旧路由按客户端实际请求提供数组，不混用Query路由的Items封装。
+
+访问日志增加固定客户端类别和凭据传输类别，只记录类别、不记录UA原文、设备ID、查询参数/头/令牌值。VidHub先前失败原因尚未定论；用户随后复测明确“vidhub可以播放视频了”，基本播放记为通过，但不将其归因于Infuse初始化接口修复。

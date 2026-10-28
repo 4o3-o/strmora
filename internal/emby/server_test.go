@@ -198,3 +198,60 @@ func TestCurrentUserByIDForClientConnectionCheck(t *testing.T) {
 		}
 	}
 }
+
+func TestVirtualFoldersMatchAuthorizedViews(t *testing.T) {
+	s, _ := fixture(t)
+	token := login(t, s)
+	for _, prefix := range []string{"", "/emby"} {
+		w := call(s, "GET", prefix+"/Library/VirtualFolders", token, "")
+		if w.Code != 200 {
+			t.Fatalf("virtual folders: %d %s", w.Code, w.Body)
+		}
+		var folders []struct {
+			ID             string `json:"ItemId"`
+			Name           string
+			CollectionType string
+			Locations      []string
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &folders); err != nil || len(folders) != 2 {
+			t.Fatalf("invalid virtual folders: %s", w.Body)
+		}
+		if folders[0].ID != "movies" || folders[0].CollectionType != "movies" || folders[1].ID != "tv" || folders[1].CollectionType != "tvshows" {
+			t.Fatalf("wrong library mapping: %+v", folders)
+		}
+		for _, f := range folders {
+			if len(f.Locations) != 0 {
+				t.Fatal("physical locations disclosed")
+			}
+		}
+		if w = call(s, "GET", prefix+"/Library/VirtualFolders", "", ""); w.Code != 401 {
+			t.Fatal("anonymous library access", w.Code)
+		}
+	}
+}
+
+func TestDisplayPreferencesDefaultsAndUserBoundary(t *testing.T) {
+	s, _ := fixture(t)
+	token := login(t, s)
+	for _, prefix := range []string{"", "/emby"} {
+		w := call(s, "GET", prefix+"/DisplayPreferences/usersettings?userId=user-p0&client=emby", token, "")
+		if w.Code != 200 {
+			t.Fatalf("display preferences: %d %s", w.Code, w.Body)
+		}
+		var v struct {
+			ID          string `json:"Id"`
+			Client      string
+			SortOrder   string
+			CustomPrefs map[string]string
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil || v.ID != "usersettings" || v.Client != "emby" || v.SortOrder != "Ascending" || v.CustomPrefs == nil {
+			t.Fatalf("wrong display defaults: %s", w.Body)
+		}
+		if w = call(s, "GET", prefix+"/DisplayPreferences/usersettings?userId=someone-else&client=emby", token, ""); w.Code != 403 {
+			t.Fatalf("user mismatch accepted: %d", w.Code)
+		}
+		if w = call(s, "GET", prefix+"/DisplayPreferences/usersettings?userId=user-p0&client=emby", "", ""); w.Code != 401 {
+			t.Fatal(w.Code)
+		}
+	}
+}

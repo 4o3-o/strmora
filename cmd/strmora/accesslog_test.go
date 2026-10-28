@@ -42,3 +42,24 @@ func TestAccessLogCapturesImplicitOK(t *testing.T) {
 		t.Fatal(out.String())
 	}
 }
+
+func TestAccessLogClassifiesClientAndQueryAuthWithoutValues(t *testing.T) {
+	var out bytes.Buffer
+	h := accessLog(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(401) }), log.New(&out, "", 0))
+	r := httptest.NewRequest("GET", "/Items/movie-p0/Images/Primary?X-Emby-Token=secret-token", nil)
+	r.Header.Set("User-Agent", "VidHub/1 CFNetwork")
+	h.ServeHTTP(httptest.NewRecorder(), r)
+	var row struct {
+		Client    string
+		Transport string `json:"auth_transport"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &row); err != nil {
+		t.Fatal(err)
+	}
+	if row.Client != "VidHub" || row.Transport != "query_emby" {
+		t.Fatalf("missing diagnostics: %s", out.String())
+	}
+	if strings.Contains(out.String(), "secret-token") {
+		t.Fatal("token leaked")
+	}
+}

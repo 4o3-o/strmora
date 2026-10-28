@@ -225,6 +225,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /Users/Me", s.currentUser)
 	s.mux.HandleFunc("GET /Users/{user}", s.currentUser)
 	s.mux.HandleFunc("GET /Users/{user}/Views", s.views)
+	s.mux.HandleFunc("GET /Library/VirtualFolders", s.virtualFolders)
+	s.mux.HandleFunc("GET /DisplayPreferences/{id}", s.displayPreferences)
 	s.mux.HandleFunc("GET /Users/{user}/Items", s.list)
 	s.mux.HandleFunc("GET /Users/{user}/Items/Latest", s.list)
 	s.mux.HandleFunc("GET /Users/{user}/Items/Resume", s.list)
@@ -323,6 +325,42 @@ func (s *Server) dto(i Item) map[string]any {
 		v["MediaSources"] = s.sources(i)
 	}
 	return v
+}
+
+// P0 has no saved display overrides, so reads expose the actual default settings.
+func (s *Server) displayPreferences(w http.ResponseWriter, r *http.Request) {
+	for _, key := range []string{"UserId", "userId", "userid"} {
+		for _, user := range r.URL.Query()[key] {
+			if user != "" && user != "user-p0" {
+				fail(w, http.StatusForbidden, "user mismatch")
+				return
+			}
+		}
+	}
+	client := r.URL.Query().Get("Client")
+	if client == "" {
+		client = r.URL.Query().Get("client")
+	}
+	if client == "" {
+		client = "emby"
+	}
+	respond(w, http.StatusOK, map[string]any{"Id": r.PathValue("id"), "Client": client, "SortBy": "SortName", "SortOrder": "Ascending", "CustomPrefs": map[string]string{}})
+}
+
+// virtualFolders exposes logical libraries, never filesystem or source credentials.
+func (s *Server) virtualFolders(w http.ResponseWriter, r *http.Request) {
+	folders := []map[string]any{}
+	for _, i := range s.items {
+		if i.Type != "CollectionFolder" {
+			continue
+		}
+		collectionType := "movies"
+		if i.ID == "tv" {
+			collectionType = "tvshows"
+		}
+		folders = append(folders, map[string]any{"Name": i.Name, "ItemId": i.ID, "Id": i.ID, "CollectionType": collectionType, "Locations": []string{}, "LibraryOptions": map[string]any{"ContentType": collectionType}})
+	}
+	respond(w, http.StatusOK, folders)
 }
 func (s *Server) views(w http.ResponseWriter, r *http.Request) {
 	if !s.allowed(w, r) {
