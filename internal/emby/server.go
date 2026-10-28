@@ -222,7 +222,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /System/Info/Public", s.info)
 	s.mux.HandleFunc("GET /System/Info", s.info)
 	s.mux.HandleFunc("POST /Users/AuthenticateByName", s.login)
-	s.mux.HandleFunc("GET /Users/Me", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, s.user()) })
+	s.mux.HandleFunc("GET /Users/Me", s.currentUser)
+	s.mux.HandleFunc("GET /Users/{user}", s.currentUser)
 	s.mux.HandleFunc("GET /Users/{user}/Views", s.views)
 	s.mux.HandleFunc("GET /Users/{user}/Items", s.list)
 	s.mux.HandleFunc("GET /Users/{user}/Items/Latest", s.list)
@@ -249,6 +250,12 @@ func (s *Server) routes() {
 }
 func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, map[string]any{"Id": s.id, "ServerName": "Strmora P0", "Version": "0.0.1", "ProductName": "Strmora", "StartupWizardCompleted": true})
+}
+func (s *Server) currentUser(w http.ResponseWriter, r *http.Request) {
+	if !s.allowed(w, r) {
+		return
+	}
+	respond(w, http.StatusOK, s.user())
 }
 func (s *Server) user() map[string]any {
 	return map[string]any{"Id": "user-p0", "Name": s.opts.Username, "ServerId": s.id, "HasPassword": true, "Policy": map[string]any{"IsAdministrator": false, "EnableAllFolders": true, "EnableMediaPlayback": true, "EnableAudioPlaybackTranscoding": false, "EnableVideoPlaybackTranscoding": false}}

@@ -174,3 +174,27 @@ func TestMissingPositionCannotEraseProgress(t *testing.T) {
 		t.Fatalf("explicit zero refused: %d", w.Code)
 	}
 }
+
+func TestCurrentUserByIDForClientConnectionCheck(t *testing.T) {
+	s, _ := fixture(t)
+	token := login(t, s)
+	for _, prefix := range []string{"", "/emby"} {
+		w := call(s, "GET", prefix+"/Users/user-p0", token, "")
+		if w.Code != 200 {
+			t.Fatalf("client user check returned %d: %s", w.Code, w.Body)
+		}
+		var user struct {
+			ID   string `json:"Id"`
+			Name string `json:"Name"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &user); err != nil || user.ID != "user-p0" || user.Name != "tester" {
+			t.Fatalf("wrong user: %s", w.Body)
+		}
+		if w = call(s, "GET", prefix+"/Users/another-user", token, ""); w.Code != 403 {
+			t.Fatalf("another user allowed: %d", w.Code)
+		}
+		if w = call(s, "GET", prefix+"/Users/user-p0", "", ""); w.Code != 401 {
+			t.Fatalf("anonymous allowed: %d", w.Code)
+		}
+	}
+}
